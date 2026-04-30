@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Copy, Terminal as TerminalIcon, Send, XCircle, Search, Cpu } from 'lucide-react';
+import { Copy, Terminal as TerminalIcon, Send, XCircle, Search, Cpu, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type Message = {
@@ -14,7 +14,7 @@ type Message = {
   content: string;
 };
 
-const CustomCodeBlock = ({ node, inline, className, children, ...props }: any) => {
+const CustomCodeBlock = ({ node, inline, className, children, theme, ...props }: any) => {
   const match = /language-(\w+)/.exec(className || '');
   const [copied, setCopied] = useState(false);
   const codeContent = String(children).replace(/\n$/, '');
@@ -27,7 +27,7 @@ const CustomCodeBlock = ({ node, inline, className, children, ...props }: any) =
 
   if (!inline && match) {
     return (
-      <div className="relative group my-4 flex flex-col bg-[#0D0D0E] border border-[#1A1A1C]">
+      <div className="relative group my-4 flex flex-col bg-[#0D0D0E] border border-[#1A1A1C] rounded-md overflow-hidden">
         <div className="flex items-center justify-between px-3 h-8 bg-[#121214] border-b border-[#1A1A1C] text-[10px] text-[#8E9299]">
           <span>{match[1]}</span>
           <button
@@ -55,21 +55,25 @@ const CustomCodeBlock = ({ node, inline, className, children, ...props }: any) =
   }
 
   return (
-    <code {...props} className="text-[#FF79C6] bg-[#1A1A1C] px-1 py-0.5 rounded-sm">
+    <code {...props} className={`px-1 py-0.5 rounded-sm ${theme === 'light' ? 'text-[#FF6600] bg-[#F3F4F6] font-bold' : 'text-[#FF79C6] bg-[#1A1A1C]'}`}>
         {children}
     </code>
   );
 };
 
-function AssistantMessage({ content }: { content: string }) {
+function AssistantMessage({ content, theme }: { content: string, theme: 'light' | 'dark' }) {
   const codeIndex = content.indexOf('```');
   
+  const proseClass = theme === 'light' 
+    ? "prose prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-black prose-a:text-[#FF6600] text-black"
+    : "prose prose-invert prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-gray-100 prose-a:text-[#FF6600]";
+
   if (codeIndex <= 0) {
     return (
-       <div className="prose prose-invert prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-gray-100 prose-a:text-[#FF6600]">
+       <div className={proseClass}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{ code: CustomCodeBlock }}
+          components={{ code: (props) => <CustomCodeBlock theme={theme} {...props} /> }}
         >
           {content}
         </ReactMarkdown>
@@ -83,22 +87,22 @@ function AssistantMessage({ content }: { content: string }) {
   return (
     <div className="flex flex-col gap-4 w-full">
       {thoughts && (
-        <details className="group border border-[#1A1A1C] bg-[#121214] rounded-md overflow-hidden">
-          <summary className="cursor-pointer px-4 py-3 text-[10px] text-[#8E9299] hover:text-[#FF6600] font-bold select-none list-none flex items-center gap-2">
+        <details className={`group border rounded-md overflow-hidden ${theme === 'light' ? 'border-[#E5E7EB] bg-[#F9FAFB]' : 'border-[#1A1A1C] bg-[#121214]'}`}>
+          <summary className={`cursor-pointer px-4 py-3 text-[10px] hover:text-[#FF6600] font-bold select-none list-none flex items-center gap-2 ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>
             <span className="group-open:hidden">[+] Expand reasoning...</span>
             <span className="hidden group-open:inline">[-] Collapse reasoning</span>
           </summary>
-          <div className="p-4 border-t border-[#1A1A1C] text-[#A1A1AA] prose prose-invert prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed">
-             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: CustomCodeBlock }}>
+          <div className={`p-4 border-t text-[11px] prose-p:leading-relaxed max-w-none prose ${theme === 'light' ? 'border-[#E5E7EB] text-[#4B5563] prose-p:text-[#4B5563] prose-headings:text-black prose-a:text-[#FF6600]' : 'border-[#1A1A1C] text-[#A1A1AA] prose-invert prose-headings:text-gray-100 prose-a:text-[#FF6600]'}`}>
+             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: (props) => <CustomCodeBlock theme={theme} {...props} /> }}>
                {thoughts}
              </ReactMarkdown>
           </div>
         </details>
       )}
-      <div className="prose prose-invert prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-gray-100 prose-a:text-[#FF6600]">
+      <div className={proseClass}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{ code: CustomCodeBlock }}
+          components={{ code: (props) => <CustomCodeBlock theme={theme} {...props} /> }}
         >
           {rest}
         </ReactMarkdown>
@@ -108,6 +112,7 @@ function AssistantMessage({ content }: { content: string }) {
 }
 
 export default function TerminalUI() {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 'welcome',
@@ -229,17 +234,26 @@ export default function TerminalUI() {
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0A0A0B] text-[#E4E4E7] font-mono selection:bg-[#FF6600]/30 selection:text-black">
+    <div className={`flex flex-col h-full font-mono selection:bg-[#FF6600]/30 selection:text-black ${theme === 'light' ? 'bg-[#FFFFFF] text-black' : 'bg-[#0A0A0B] text-[#E4E4E7]'}`}>
       {/* Header Bar */}
-      <header className="flex-none h-12 border-b border-[#1A1A1C] flex items-center justify-between px-6 bg-[#0E0E10] select-none">
+      <header className={`flex-none h-12 border-b flex items-center justify-between px-6 select-none ${theme === 'light' ? 'border-[#E5E7EB] bg-[#F9FAFB]' : 'border-[#1A1A1C] bg-[#0E0E10]'}`}>
         <div className="flex items-center gap-4">
           <div className="w-3 h-3 rounded-full bg-[#FF6600] shadow-[0_0_8px_#FF6600]"></div>
           <h1 className="text-xs tracking-widest font-bold text-[#FF6600]">MIDEN.DEV // TERMINAL_V1</h1>
         </div>
-        <div className="flex items-center gap-6 text-[10px] text-[#8E9299]">
+        <div className={`flex items-center gap-6 text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>
           <span className="hidden sm:inline">PROMPT_TOKENS: --</span>
           <span className="hidden sm:inline">LATENCY: --ms</span>
           <span className="text-[#FF6600]">STATUS: CONNECTED</span>
+          <button 
+            type="button" 
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            className="flex items-center gap-1 hover:text-[#FF6600] transition-colors ml-2"
+            title="Toggle Theme"
+          >
+            {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+            <span className="hidden sm:inline">{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
+          </button>
           <button 
             type="button" 
             onClick={handleClear}
@@ -255,7 +269,7 @@ export default function TerminalUI() {
       <main 
         ref={mainRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#0A0A0B]"
+        className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 ${theme === 'light' ? 'bg-[#FFFFFF]' : 'bg-[#0A0A0B]'}`}
       >
         <AnimatePresence initial={false}>
           {messages.map((message) => (
@@ -270,11 +284,15 @@ export default function TerminalUI() {
                   {message.role === 'user' ? '➜' : '●'}
                 </span>
                 
-                <div className={`flex-1 min-w-0 ${message.role === 'user' ? 'text-[#8E9299]' : 'text-[#A1A1AA]'}`}>
+                <div className={`flex-1 min-w-0 ${
+                  message.role === 'user' 
+                    ? (theme === 'light' ? 'text-[#4B5563] font-semibold' : 'text-[#8E9299]') 
+                    : (theme === 'light' ? 'text-black' : 'text-[#A1A1AA]')
+                }`}>
                   {message.role === 'user' ? (
                      <div className="whitespace-pre-wrap">{message.content}</div>
                   ) : (
-                     <AssistantMessage content={message.content} />
+                     <AssistantMessage content={message.content} theme={theme} />
                   )}
                 </div>
               </div>
@@ -299,13 +317,13 @@ export default function TerminalUI() {
       </main>
 
       {/* Input Area */}
-      <footer className="flex-none p-4 pb-6 bg-[#0A0A0B] border-t border-[#1A1A1C]">
+      <footer className={`flex-none p-4 pb-6 border-t ${theme === 'light' ? 'bg-[#FFFFFF] border-[#E5E7EB]' : 'bg-[#0A0A0B] border-[#1A1A1C]'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
           <div className="flex items-center justify-between opacity-60 italic select-none">
-            <span className="text-[10px] text-[#8E9299]">System Prompt: <span className="text-[#FF6600] not-italic">LOADED_&_STRICT</span></span>
-            <span className="text-[10px] text-[#8E9299]">v0.13 API</span>
+            <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>System Prompt: <span className="text-[#FF6600] not-italic">LOADED_&_STRICT</span></span>
+            <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>v0.13 API</span>
           </div>
-          <form onSubmit={handleSubmit} className="bg-[#1A1A1C] rounded-md p-3 flex items-center gap-3 border border-[#2D2D30] focus-within:border-[#FF6600]/50 transition-colors">
+          <form onSubmit={handleSubmit} className={`rounded-md p-3 flex items-center gap-3 border transition-colors focus-within:border-[#FF6600]/50 ${theme === 'light' ? 'bg-[#F9FAFB] border-[#D1D5DB]' : 'bg-[#1A1A1C] border-[#2D2D30]'}`}>
             <span className="text-[#FF6600] animate-pulse font-bold">_</span>
             <input
               ref={inputRef}
@@ -314,14 +332,14 @@ export default function TerminalUI() {
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
               placeholder="Type your coding request..."
-              className="bg-transparent border-none outline-none flex-1 text-[11px] text-[#E4E4E7] placeholder-[#8E9299]"
+              className={`bg-transparent border-none outline-none flex-1 text-[11px] ${theme === 'light' ? 'text-black placeholder-[#9CA3AF]' : 'text-[#E4E4E7] placeholder-[#8E9299]'}`}
               autoComplete="off"
               spellCheck="false"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className="text-[#8E9299] hover:text-[#FF6600] disabled:opacity-30 transition-colors disabled:hover:text-[#8E9299]"
+              className={`disabled:opacity-30 transition-colors ${theme === 'light' ? 'text-[#9CA3AF] hover:text-[#FF6600] disabled:hover:text-[#9CA3AF]' : 'text-[#8E9299] hover:text-[#FF6600] disabled:hover:text-[#8E9299]'}`}
             >
               <Send size={14} />
             </button>
