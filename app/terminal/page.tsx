@@ -1,0 +1,11 @@
+import TerminalUI from '@/components/Terminal';
+
+export default function TerminalPage() {
+  return (
+    <main className="h-screen w-full bg-[#0A0A0B] sm:p-2 sm:bg-black overflow-hidden flex flex-col">
+      <div className="flex-1 w-full max-w-[1440px] mx-auto bg-[#0A0A0B] sm:border-4 sm:border-[#1A1A1C] shadow-2xl flex flex-col overflow-hidden relative">
+        <TerminalUI />
+      </div>
+    </main>
+  );
+}
