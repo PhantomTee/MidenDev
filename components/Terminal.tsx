@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Copy, Terminal as TerminalIcon, Send, XCircle, Search, Cpu, Sun, Moon } from 'lucide-react';
+import { Copy, Terminal as TerminalIcon, Send, XCircle, Search, Cpu, Sun, Moon, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 type Message = {
@@ -113,19 +114,50 @@ function AssistantMessage({ content, theme }: { content: string, theme: 'light' 
 
 export default function TerminalUI() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: 'welcome',
-      role: 'assistant',
-      content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_'
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const [autoScrollEn, setAutoScrollEn] = useState(true);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('miden-terminal-theme');
+    if (savedTheme === 'light' || savedTheme === 'dark') {
+      setTheme(savedTheme);
+    }
+    const savedMessages = localStorage.getItem('miden-terminal-messages');
+    if (savedMessages) {
+      try {
+        setMessages(JSON.parse(savedMessages));
+      } catch (e) {
+        console.error("Failed to parse saved messages", e);
+      }
+    } else {
+      setMessages([
+        {
+          id: 'welcome',
+          role: 'assistant',
+          content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_'
+        }
+      ]);
+    }
+    setIsInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem('miden-terminal-theme', theme);
+    }
+  }, [theme, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized && messages.length > 0) {
+      localStorage.setItem('miden-terminal-messages', JSON.stringify(messages));
+    }
+  }, [messages, isInitialized]);
 
   const handleScroll = () => {
     if (!mainRef.current) return;
@@ -146,10 +178,31 @@ export default function TerminalUI() {
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, []);
+  }, [isInitialized]);
 
   const handleClear = () => {
-    setMessages([]);
+    const defaultMessages: Message[] = [
+      {
+        id: 'welcome',
+        role: 'assistant',
+        content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_'
+      }
+    ];
+    setMessages(defaultMessages);
+    localStorage.removeItem('miden-terminal-messages');
+  };
+
+  const handleExport = () => {
+    const markdown = messages.map(m => `**${m.role === 'user' ? 'User' : 'MidenDev'}**:\n\n${m.content}`).join('\n\n---\n\n');
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `miden-session-${new Date().toISOString().slice(0,10)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -236,32 +289,49 @@ export default function TerminalUI() {
   return (
     <div className={`flex flex-col h-full font-mono selection:bg-[#FF6600]/30 selection:text-black ${theme === 'light' ? 'bg-[#FFFFFF] text-black' : 'bg-[#0A0A0B] text-[#E4E4E7]'}`}>
       {/* Header Bar */}
-      <header className={`flex-none h-12 border-b flex items-center justify-between px-6 select-none ${theme === 'light' ? 'border-[#E5E7EB] bg-[#F9FAFB]' : 'border-[#1A1A1C] bg-[#0E0E10]'}`}>
-        <div className="flex items-center gap-4">
+      <header className={`flex-none h-12 border-b flex items-center justify-between px-4 sm:px-6 select-none ${theme === 'light' ? 'border-[#E5E7EB] bg-[#F9FAFB]' : 'border-[#1A1A1C] bg-[#0E0E10]'}`}>
+        <Link href="/" className="flex items-center gap-3 sm:gap-4 hover:opacity-80 transition-opacity">
           <div className="w-3 h-3 rounded-full bg-[#FF6600] shadow-[0_0_8px_#FF6600]"></div>
-          <h1 className="text-xs tracking-widest font-bold text-[#FF6600]">MIDEN.DEV // TERMINAL_V1</h1>
-        </div>
-        <div className={`flex items-center gap-6 text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>
+          <h1 className="text-[10px] sm:text-xs tracking-widest font-bold text-[#FF6600]">
+            <span className="hidden sm:inline">MIDEN.DEV // TERMINAL_V1</span>
+            <span className="inline sm:hidden">MIDEN.DEV</span>
+          </h1>
+        </Link>
+        <div className={`flex items-center gap-4 sm:gap-6 text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>
           <span className="hidden sm:inline">PROMPT_TOKENS: --</span>
           <span className="hidden sm:inline">LATENCY: --ms</span>
-          <span className="text-[#FF6600]">STATUS: CONNECTED</span>
-          <button 
-            type="button" 
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-            className="flex items-center gap-1 hover:text-[#FF6600] transition-colors ml-2"
-            title="Toggle Theme"
-          >
-            {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
-            <span className="hidden sm:inline">{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
-          </button>
-          <button 
-            type="button" 
-            onClick={handleClear}
-            className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
-          >
-            <XCircle size={12} />
-            CLEAR HISTORY
-          </button>
+          <span className="hidden sm:inline text-[#FF6600]">STATUS: CONNECTED</span>
+          <span className="sm:hidden text-[#FF6600]">LIVE</span>
+          
+          <div className="flex gap-4 sm:gap-6 items-center">
+            <button 
+              type="button" 
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
+              title="Toggle Theme"
+            >
+              {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+              <span className="hidden sm:inline">{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
+            </button>
+            <button 
+              type="button" 
+              onClick={handleExport}
+              className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
+              title="Export Session"
+            >
+              <Download size={12} />
+              <span className="hidden sm:inline">EXPORT</span>
+            </button>
+            <button 
+              type="button" 
+              onClick={handleClear}
+              className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
+              title="Clear History"
+            >
+              <XCircle size={12} />
+              <span className="hidden sm:inline">CLEAR</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -317,7 +387,7 @@ export default function TerminalUI() {
       </main>
 
       {/* Input Area */}
-      <footer className={`flex-none p-4 pb-6 border-t ${theme === 'light' ? 'bg-[#FFFFFF] border-[#E5E7EB]' : 'bg-[#0A0A0B] border-[#1A1A1C]'}`}>
+      <footer className={`flex-none p-4 pb-4 sm:pb-6 border-t ${theme === 'light' ? 'bg-[#FFFFFF] border-[#E5E7EB]' : 'bg-[#0A0A0B] border-[#1A1A1C]'}`}>
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
           <div className="flex items-center justify-between opacity-60 italic select-none">
             <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>System Prompt: <span className="text-[#FF6600] not-italic">LOADED_&_STRICT</span></span>
