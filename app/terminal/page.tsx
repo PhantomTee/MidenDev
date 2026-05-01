@@ -1,6 +1,10 @@
-import TerminalUI from '@/components/Terminal';
+'use client';
+
 import ConnectWalletDynamic from '@/components/ConnectWalletDynamic';
 import { ClientProviders } from '@/app/ClientProviders';
+import dynamic from 'next/dynamic';
+
+const TerminalUI = dynamic(() => import('@/components/Terminal'), { ssr: false });
 
 export default function TerminalPage() {
   return (

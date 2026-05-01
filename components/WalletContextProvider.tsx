@@ -24,7 +24,14 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
   );
 
   return (
-    <WalletProvider wallets={wallets} autoConnect>
+    <WalletProvider 
+      wallets={wallets} 
+      autoConnect={false}
+      onError={(error) => {
+        console.error("WalletProvider Error:", error);
+        alert(`Wallet Error: ${error.message || error.name}`);
+      }}
+    >
       <WalletModalProvider>
         {children}
       </WalletModalProvider>
