@@ -29,6 +29,7 @@ const nextConfig: NextConfig = {
         ignored: /.*/,
       };
     }
+    config.experiments = { ...config.experiments, topLevelAwait: true, asyncWebAssembly: true, syncWebAssembly: true, layers: true };
     return config;
   },
 };

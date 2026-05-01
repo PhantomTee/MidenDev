@@ -117,6 +117,10 @@ export default function TerminalUI() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isNodeInit, setIsNodeInit] = useState(false);
+  const [nodeLogs, setNodeLogs] = useState<string[]>([]);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -139,7 +143,6 @@ export default function TerminalUI() {
         console.error("Failed to parse saved messages", e);
       }
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([
         {
           id: 'welcome',
@@ -410,6 +413,7 @@ export default function TerminalUI() {
             <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>System Prompt: <span className="text-[#FF6600] not-italic">LOADED_&_STRICT</span></span>
             <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>v0.13 API</span>
           </div>
+          
           <form onSubmit={handleSubmit} className={`rounded-md p-3 flex items-center gap-3 border transition-colors focus-within:border-[#FF6600]/50 ${theme === 'light' ? 'bg-[#F9FAFB] border-[#D1D5DB]' : 'bg-[#1A1A1C] border-[#2D2D30]'}`}>
             <span className="text-[#FF6600] animate-pulse font-bold">_</span>
             <input
