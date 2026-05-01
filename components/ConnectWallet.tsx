@@ -8,12 +8,7 @@ export default function ConnectWallet({ children }: { children?: React.ReactNode
   // 1. Success State (Metal Connected)
   if (connected) {
     return (
-      <div className="bg-[#0D1117] min-h-full flex flex-col font-mono text-orange-500">
-        <div className="p-4 border-b border-orange-500/30">
-          <p className="font-bold tracking-widest text-sm">
-            &gt; Connected to Miden Wallet: {publicKey ? Array.from(publicKey).map(b => b.toString(16).padStart(2, '0')).join('') : "Unknown"}
-          </p>
-        </div>
+      <div className="bg-[#0A0A0B] min-h-full flex flex-col font-mono">
         <div className="flex-1 relative">
           {children}
         </div>

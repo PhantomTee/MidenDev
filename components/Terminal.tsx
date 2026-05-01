@@ -9,6 +9,8 @@ import { dracula } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Copy, Terminal as TerminalIcon, Send, XCircle, Search, Cpu, Sun, Moon, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+import { useWallet } from '@miden-sdk/miden-wallet-adapter';
+
 type Message = {
   id: string;
   role: 'user' | 'assistant';
@@ -16,7 +18,7 @@ type Message = {
   timestamp?: string;
 };
 
-const CustomCodeBlock = ({ node, inline, className, children, theme, ...props }: any) => {
+const CustomCodeBlock = ({ node, inline, className, children, ...props }: any) => {
   const match = /language-(\w+)/.exec(className || '');
   const [copied, setCopied] = useState(false);
   const codeContent = String(children).replace(/\n$/, '');
@@ -29,16 +31,16 @@ const CustomCodeBlock = ({ node, inline, className, children, theme, ...props }:
 
   if (!inline && match) {
     return (
-      <div className="relative group my-4 flex flex-col bg-[#0D0D0E] border border-[#1A1A1C] rounded-md overflow-hidden">
-        <div className="flex items-center justify-between px-3 h-8 bg-[#121214] border-b border-[#1A1A1C] text-[10px] text-[#8E9299]">
-          <span>{match[1]}</span>
+      <div className="relative group my-4 flex flex-col bg-black border border-orange-500/30 rounded-none overflow-hidden">
+        <div className="flex items-center justify-between px-3 h-8 bg-orange-500/5 border-b border-orange-500/30 text-[10px] text-orange-500/60 font-mono">
+          <span className="uppercase tracking-widest">{match[1]}</span>
           <button
             onClick={handleCopy}
-            className="hover:text-[#FF6600] transition-colors flex items-center gap-2"
+            className="hover:text-white transition-colors flex items-center gap-2"
             aria-label="Copy code"
           >
             <Copy size={12} />
-            <span>{copied ? 'COPIED' : 'COPY'}</span>
+            <span className="font-bold">{copied ? 'COPIED' : 'COPY'}</span>
           </button>
         </div>
         <div className="p-4 overflow-x-auto text-[11px] leading-relaxed">
@@ -57,25 +59,23 @@ const CustomCodeBlock = ({ node, inline, className, children, theme, ...props }:
   }
 
   return (
-    <code {...props} className={`px-1 py-0.5 rounded-sm ${theme === 'light' ? 'text-[#FF6600] bg-[#F3F4F6] font-bold' : 'text-[#FF79C6] bg-[#1A1A1C]'}`}>
+    <code {...props} className="px-1 py-0.5 bg-orange-500/10 text-orange-500 font-bold border border-orange-500/20">
         {children}
     </code>
   );
 };
 
-function AssistantMessage({ content, theme }: { content: string, theme: 'light' | 'dark' }) {
+function AssistantMessage({ content }: { content: string }) {
   const codeIndex = content.indexOf('```');
   
-  const proseClass = theme === 'light' 
-    ? "prose prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-black prose-a:text-[#FF6600] text-black"
-    : "prose prose-invert prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-gray-100 prose-a:text-[#FF6600]";
+  const proseClass = "prose prose-invert prose-pre:bg-transparent prose-pre:m-0 prose-pre:p-0 max-w-none text-[11px] prose-p:leading-relaxed prose-headings:text-orange-500 prose-a:text-white prose-p:text-orange-500/90 prose-strong:text-orange-500 prose-code:text-orange-500";
 
   if (codeIndex <= 0) {
     return (
        <div className={proseClass}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{ code: (props) => <CustomCodeBlock theme={theme} {...props} /> }}
+          components={{ code: (props) => <CustomCodeBlock {...props} /> }}
         >
           {content}
         </ReactMarkdown>
@@ -89,13 +89,13 @@ function AssistantMessage({ content, theme }: { content: string, theme: 'light' 
   return (
     <div className="flex flex-col gap-4 w-full">
       {thoughts && (
-        <details className={`group border rounded-md overflow-hidden ${theme === 'light' ? 'border-[#E5E7EB] bg-[#F9FAFB]' : 'border-[#1A1A1C] bg-[#121214]'}`}>
-          <summary className={`cursor-pointer px-4 py-3 text-[10px] hover:text-[#FF6600] font-bold select-none list-none flex items-center gap-2 ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>
-            <span className="group-open:hidden">[+] Expand reasoning...</span>
-            <span className="hidden group-open:inline">[-] Collapse reasoning</span>
+        <details className="group border border-orange-500/20 bg-black/40 overflow-hidden rounded-none">
+          <summary className="cursor-pointer px-4 py-3 text-[10px] hover:text-white font-bold select-none list-none flex items-center gap-2 text-orange-500/60 uppercase tracking-widest">
+            <span className="group-open:hidden">[+] REASONING_UNIT</span>
+            <span className="hidden group-open:inline">[-] COLLAPSE_COGNITION</span>
           </summary>
-          <div className={`p-4 border-t text-[11px] prose-p:leading-relaxed max-w-none prose ${theme === 'light' ? 'border-[#E5E7EB] text-[#4B5563] prose-p:text-[#4B5563] prose-headings:text-black prose-a:text-[#FF6600]' : 'border-[#1A1A1C] text-[#A1A1AA] prose-invert prose-headings:text-gray-100 prose-a:text-[#FF6600]'}`}>
-             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: (props) => <CustomCodeBlock theme={theme} {...props} /> }}>
+          <div className="p-4 border-t border-orange-500/20 text-[11px] prose-p:leading-relaxed max-w-none prose prose-invert prose-p:text-orange-500/70 prose-headings:text-orange-500">
+             <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ code: (props) => <CustomCodeBlock {...props} /> }}>
                {thoughts}
              </ReactMarkdown>
           </div>
@@ -104,7 +104,7 @@ function AssistantMessage({ content, theme }: { content: string, theme: 'light' 
       <div className={proseClass}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
-          components={{ code: (props) => <CustomCodeBlock theme={theme} {...props} /> }}
+          components={{ code: (props) => <CustomCodeBlock {...props} /> }}
         >
           {rest}
         </ReactMarkdown>
@@ -114,13 +114,9 @@ function AssistantMessage({ content, theme }: { content: string, theme: 'light' 
 }
 
 export default function TerminalUI() {
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const { connected, publicKey } = useWallet();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
-  const [isNodeInit, setIsNodeInit] = useState(false);
-  const [nodeLogs, setNodeLogs] = useState<string[]>([]);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [accountId, setAccountId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -128,38 +124,36 @@ export default function TerminalUI() {
   const mainRef = useRef<HTMLElement>(null);
   const [autoScrollEn, setAutoScrollEn] = useState(true);
 
+  const shortenAddress = (pubKey: Uint8Array | null) => {
+    if (!pubKey) return 'DISCONNECTED';
+    const hex = Array.from(pubKey).map(b => b.toString(16).padStart(2, '0')).join('');
+    const displayAddress = hex.startsWith('mtst1') ? hex : `mtst1${hex}`;
+    return `${displayAddress.slice(0, 9)}...${displayAddress.slice(-4)}`;
+  };
+
   useEffect(() => {
-    const savedTheme = localStorage.getItem('miden-terminal-theme');
-    if (savedTheme === 'light' || savedTheme === 'dark') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTheme(savedTheme);
-    }
     const savedMessages = localStorage.getItem('miden-terminal-messages');
     if (savedMessages) {
       try {
+        const parsed = JSON.parse(savedMessages);
         // eslint-disable-next-line react-hooks/set-state-in-effect
-        setMessages(JSON.parse(savedMessages));
+        setMessages(parsed);
       } catch (e) {
         console.error("Failed to parse saved messages", e);
       }
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([
         {
           id: 'welcome',
           role: 'assistant',
-          content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_',
+          content: '# MIDEN_DEV CORE LOADED\n\nWelcome to the specialized terminal for Polygon Miden.\n\nAvailable Protocols:\n- [/craft-note](/craft-note)\n- [/deploy-faucet](/deploy-faucet)\n- [/node-status](/node-status)\n\nType your command or prompt below.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     }
     setIsInitialized(true);
   }, []);
-
-  useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('miden-terminal-theme', theme);
-    }
-  }, [theme, isInitialized]);
 
   useEffect(() => {
     if (isInitialized && messages.length > 0) {
@@ -302,49 +296,40 @@ export default function TerminalUI() {
   };
 
   return (
-    <div className={`flex flex-col h-full font-mono selection:bg-[#FF6600]/30 selection:text-black ${theme === 'light' ? 'bg-[#FFFFFF] text-black' : 'bg-[#0A0A0B] text-[#E4E4E7]'}`}>
+    <div className="flex flex-col h-full font-mono selection:bg-orange-500/30 selection:text-black bg-[#0D1117] text-orange-500">
       {/* Header Bar */}
-      <header className={`flex-none h-12 border-b flex items-center justify-between px-4 sm:px-6 select-none ${theme === 'light' ? 'border-[#E5E7EB] bg-[#F9FAFB]' : 'border-[#1A1A1C] bg-[#0E0E10]'}`}>
+      <header className="flex-none h-12 border-b border-orange-500 flex items-center justify-between px-4 sm:px-6 select-none bg-[#0D1117]">
         <Link href="/" className="flex items-center gap-3 sm:gap-4 hover:opacity-80 transition-opacity">
-          <div className="w-3 h-3 rounded-full bg-[#FF6600] shadow-[0_0_8px_#FF6600]"></div>
-          <h1 className="text-[10px] sm:text-xs tracking-widest font-bold text-[#FF6600]">
-            <span className="hidden sm:inline">MIDEN.DEV // TERMINAL_V1</span>
-            <span className="inline sm:hidden">MIDEN.DEV</span>
+          <div className="w-3 h-3 bg-orange-500 animate-pulse"></div>
+          <h1 className="text-[10px] sm:text-xs tracking-widest font-black text-orange-500 italic uppercase">
+            MIDEN_OS // KERNEL_0.14.5
           </h1>
         </Link>
-        <div className={`flex items-center gap-4 sm:gap-6 text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>
-          <span className="hidden sm:inline">PROMPT_TOKENS: --</span>
-          <span className="hidden sm:inline">LATENCY: --ms</span>
-          <span className="hidden sm:inline text-[#FF6600]">STATUS: CONNECTED</span>
-          <span className="sm:hidden text-[#FF6600]">LIVE</span>
+        <div className="flex items-center gap-4 sm:gap-6 text-[10px] text-orange-500 font-mono">
+          <span className={connected ? 'text-orange-500' : 'text-orange-900 border border-orange-900 px-1'}>
+            STATUS: {connected ? 'CONNECTED' : 'STANDBY'}
+          </span>
+          <span className="hidden sm:inline text-orange-500/30">|</span>
+          <span className="hidden sm:inline">
+            WALLET: {shortenAddress(publicKey)}
+          </span>
           
           <div className="flex gap-4 sm:gap-6 items-center">
             <button 
               type="button" 
-              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
-              className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
-              title="Toggle Theme"
-            >
-              {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
-              <span className="hidden sm:inline">{theme === 'dark' ? 'LIGHT' : 'DARK'}</span>
-            </button>
-            <button 
-              type="button" 
               onClick={handleExport}
-              className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
+              className="flex items-center gap-1 hover:text-white transition-colors"
               title="Export Session"
             >
               <Download size={12} />
-              <span className="hidden sm:inline">EXPORT</span>
             </button>
             <button 
               type="button" 
               onClick={handleClear}
-              className="flex items-center gap-1 hover:text-[#FF6600] transition-colors"
+              className="flex items-center gap-1 hover:text-white transition-colors"
               title="Clear History"
             >
               <XCircle size={12} />
-              <span className="hidden sm:inline">CLEAR</span>
             </button>
           </div>
         </div>
@@ -354,35 +339,30 @@ export default function TerminalUI() {
       <main 
         ref={mainRef}
         onScroll={handleScroll}
-        className={`flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 ${theme === 'light' ? 'bg-[#FFFFFF]' : 'bg-[#0A0A0B]'}`}
+        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#0D1117]"
       >
         <AnimatePresence initial={false}>
           {messages.map((message) => (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
               key={message.id}
               className="flex flex-col max-w-4xl mx-auto w-full gap-1 text-[11px] leading-relaxed"
             >
-              {message.timestamp && (
-                <div className={`text-[9px] ${theme === 'light' ? 'text-gray-400' : 'text-gray-600'} ${message.role === 'user' ? 'text-left ml-6' : 'text-right'}`}>
-                  {message.timestamp}
-                </div>
-              )}
               <div className="flex gap-2 w-full">
-                <span className="text-[#FF6600] shrink-0 font-bold mt-0.5">
+                <span className="text-orange-500 shrink-0 font-bold mt-0.5">
                   {message.role === 'user' ? '➜' : '●'}
                 </span>
                 
                 <div className={`flex-1 min-w-0 ${
                   message.role === 'user' 
-                    ? (theme === 'light' ? 'text-[#4B5563] font-semibold' : 'text-[#8E9299]') 
-                    : (theme === 'light' ? 'text-black' : 'text-[#A1A1AA]')
+                    ? 'text-orange-500/80 font-bold' 
+                    : 'text-orange-500'
                 }`}>
                   {message.role === 'user' ? (
                      <div className="whitespace-pre-wrap">{message.content}</div>
                   ) : (
-                     <AssistantMessage content={message.content} theme={theme} />
+                     <AssistantMessage content={message.content} />
                   )}
                 </div>
               </div>
@@ -393,11 +373,11 @@ export default function TerminalUI() {
         {isLoading && (
           <div className="flex max-w-4xl mx-auto w-full gap-3 text-[11px] leading-relaxed">
              <div className="flex gap-2 w-full">
-                <span className="text-[#FF6600] shrink-0 font-bold mt-0.5">●</span>
+                <span className="text-orange-500 shrink-0 font-bold mt-0.5">●</span>
                 <div className="flex gap-1 items-center h-4 mt-0.5">
-                    <div className="w-1.5 h-1.5 bg-[#FF6600] rounded-full animate-bounce [animation-delay:-0.3s]" />
-                    <div className="w-1.5 h-1.5 bg-[#FF6600] rounded-full animate-bounce [animation-delay:-0.15s]" />
-                    <div className="w-1.5 h-1.5 bg-[#FF6600] rounded-full animate-bounce" />
+                    <div className="w-1.5 h-1.5 bg-orange-500 animate-pulse" />
+                    <div className="w-1.5 h-1.5 bg-orange-500 animate-pulse [animation-delay:0.2s]" />
+                    <div className="w-1.5 h-1.5 bg-orange-500 animate-pulse [animation-delay:0.4s]" />
                 </div>
              </div>
           </div>
@@ -407,30 +387,30 @@ export default function TerminalUI() {
       </main>
 
       {/* Input Area */}
-      <footer className={`flex-none p-4 pb-4 sm:pb-6 border-t ${theme === 'light' ? 'bg-[#FFFFFF] border-[#E5E7EB]' : 'bg-[#0A0A0B] border-[#1A1A1C]'}`}>
+      <footer className="flex-none p-4 pb-4 sm:pb-6 border-t border-orange-500/30 bg-[#0D1117]">
         <div className="max-w-4xl mx-auto flex flex-col gap-3">
           <div className="flex items-center justify-between opacity-60 italic select-none">
-            <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>System Prompt: <span className="text-[#FF6600] not-italic">LOADED_&_STRICT</span></span>
-            <span className={`text-[10px] ${theme === 'light' ? 'text-[#6B7280]' : 'text-[#8E9299]'}`}>v0.13 API</span>
+            <span className="text-[10px] text-orange-500">System Protocol: <span className="text-orange-500 not-italic font-bold">STRICT_ORANGE</span></span>
+            <span className="text-[10px] text-orange-500">MIDEN_SDK v0.14.5</span>
           </div>
           
-          <form onSubmit={handleSubmit} className={`rounded-md p-3 flex items-center gap-3 border transition-colors focus-within:border-[#FF6600]/50 ${theme === 'light' ? 'bg-[#F9FAFB] border-[#D1D5DB]' : 'bg-[#1A1A1C] border-[#2D2D30]'}`}>
-            <span className="text-[#FF6600] animate-pulse font-bold">_</span>
+          <form onSubmit={handleSubmit} className="p-3 flex items-center gap-3 border border-orange-500 transition-colors focus-within:bg-orange-500/5 bg-black/20">
+            <span className="text-orange-500 animate-pulse font-bold">_</span>
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
-              placeholder="Type your coding request..."
-              className={`bg-transparent border-none outline-none flex-1 text-[11px] ${theme === 'light' ? 'text-black placeholder-[#9CA3AF]' : 'text-[#E4E4E7] placeholder-[#8E9299]'}`}
+              placeholder="ENTER_COMMAND_OR_PROMPT..."
+              className="bg-transparent border-none outline-none flex-1 text-[11px] text-orange-500 placeholder-orange-900"
               autoComplete="off"
               spellCheck="false"
             />
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
-              className={`disabled:opacity-30 transition-colors ${theme === 'light' ? 'text-[#9CA3AF] hover:text-[#FF6600] disabled:hover:text-[#9CA3AF]' : 'text-[#8E9299] hover:text-[#FF6600] disabled:hover:text-[#8E9299]'}`}
+              className="disabled:opacity-30 transition-colors text-orange-500 hover:text-white"
             >
               <Send size={14} />
             </button>
