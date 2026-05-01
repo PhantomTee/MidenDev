@@ -13,6 +13,7 @@ type Message = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  timestamp?: string;
 };
 
 const CustomCodeBlock = ({ node, inline, className, children, theme, ...props }: any) => {
@@ -126,21 +127,25 @@ export default function TerminalUI() {
   useEffect(() => {
     const savedTheme = localStorage.getItem('miden-terminal-theme');
     if (savedTheme === 'light' || savedTheme === 'dark') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(savedTheme);
     }
     const savedMessages = localStorage.getItem('miden-terminal-messages');
     if (savedMessages) {
       try {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setMessages(JSON.parse(savedMessages));
       } catch (e) {
         console.error("Failed to parse saved messages", e);
       }
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessages([
         {
           id: 'welcome',
           role: 'assistant',
-          content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_'
+          content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
     }
@@ -185,7 +190,8 @@ export default function TerminalUI() {
       {
         id: 'welcome',
         role: 'assistant',
-        content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_'
+        content: 'Welcome to **MidenDev**. I am an expert AI assistant for the Miden blockchain.\n\nType your prompt below to start building Miden smart contracts. E.g. _"build me a token vault contract"_',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }
     ];
     setMessages(defaultMessages);
@@ -213,6 +219,7 @@ export default function TerminalUI() {
       id: Date.now().toString(),
       role: 'user',
       content: input,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -220,7 +227,12 @@ export default function TerminalUI() {
     setIsLoading(true);
 
     const assistantMessageId = (Date.now() + 1).toString();
-    setMessages((prev) => [...prev, { id: assistantMessageId, role: 'assistant', content: '' }]);
+    setMessages((prev) => [...prev, { 
+      id: assistantMessageId, 
+      role: 'assistant', 
+      content: '', 
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+    }]);
 
     try {
       const response = await fetch('/api/chat', {
@@ -347,8 +359,13 @@ export default function TerminalUI() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               key={message.id}
-              className="flex max-w-4xl mx-auto w-full gap-3 text-[11px] leading-relaxed"
+              className="flex flex-col max-w-4xl mx-auto w-full gap-1 text-[11px] leading-relaxed"
             >
+              {message.timestamp && (
+                <div className={`text-[9px] ${theme === 'light' ? 'text-gray-400' : 'text-gray-600'} ${message.role === 'user' ? 'text-left ml-6' : 'text-right'}`}>
+                  {message.timestamp}
+                </div>
+              )}
               <div className="flex gap-2 w-full">
                 <span className="text-[#FF6600] shrink-0 font-bold mt-0.5">
                   {message.role === 'user' ? '➜' : '●'}

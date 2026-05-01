@@ -181,7 +181,7 @@ impl TokenVault {
                   </div>
                   <div>
                     <strong className="block text-white mb-1 tracking-widest text-sm">STATEFUL ACCOUNTS</strong>
-                    <p className="text-sm text-gray-400">Map custom Rust structs to Miden's typed storage slots instantly.</p>
+                    <p className="text-sm text-gray-400">Map custom Rust structs to Miden&apos;s typed storage slots instantly.</p>
                   </div>
                 </li>
                 <li className="flex items-start gap-4">
