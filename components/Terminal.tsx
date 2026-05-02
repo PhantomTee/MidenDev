@@ -297,49 +297,11 @@ export default function TerminalUI() {
 
   return (
     <div className="flex flex-col h-full font-mono selection:bg-orange-500/30 selection:text-black bg-[#0D1117] text-orange-500">
-      {/* Header Bar */}
-      <header className="flex-none h-12 border-b border-orange-500 flex items-center justify-between px-4 sm:px-6 select-none bg-[#0D1117]">
-        <Link href="/" className="flex items-center gap-3 sm:gap-4 hover:opacity-80 transition-opacity">
-          <div className="w-3 h-3 bg-orange-500 animate-pulse"></div>
-          <h1 className="text-[10px] sm:text-xs tracking-widest font-black text-orange-500 italic uppercase">
-            MIDEN_OS // KERNEL_0.14.5
-          </h1>
-        </Link>
-        <div className="flex items-center gap-4 sm:gap-6 text-[10px] text-orange-500 font-mono">
-          <span className={connected ? 'text-orange-500' : 'text-orange-900 border border-orange-900 px-1'}>
-            STATUS: {connected ? 'CONNECTED' : 'STANDBY'}
-          </span>
-          <span className="hidden sm:inline text-orange-500/30">|</span>
-          <span className="hidden sm:inline">
-            WALLET: {shortenAddress(publicKey)}
-          </span>
-          
-          <div className="flex gap-4 sm:gap-6 items-center">
-            <button 
-              type="button" 
-              onClick={handleExport}
-              className="flex items-center gap-1 hover:text-white transition-colors"
-              title="Export Session"
-            >
-              <Download size={12} />
-            </button>
-            <button 
-              type="button" 
-              onClick={handleClear}
-              className="flex items-center gap-1 hover:text-white transition-colors"
-              title="Clear History"
-            >
-              <XCircle size={12} />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Terminal Area */}
+      {/* Terminal Content Area (Scrollable) */}
       <main 
         ref={mainRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#0D1117]"
+        className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-[#07090D]"
       >
         <AnimatePresence initial={false}>
           {messages.map((message) => (

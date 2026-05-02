@@ -20,20 +20,20 @@ export function StatusBar() {
   };
 
   return (
-    <div className="w-full border-b border-orange-500 bg-[#0D1117] p-3 font-mono text-[10px] sm:text-xs">
-      <div className="max-w-7xl mx-auto flex items-center justify-between px-4">
+    <div className="w-full h-12 border-b border-white/5 bg-[#0D1117] flex items-center font-mono text-[10px] sm:text-xs">
+      <div className="w-full max-w-7xl mx-auto flex items-center justify-between px-6">
         <div className="flex items-center gap-4">
-          <span className={connected ? 'text-orange-500 font-bold' : 'text-orange-900 border border-orange-900 px-1'}>
+          <span className={connected ? 'text-orange-500 font-bold' : 'text-white/40 border border-white/10 px-1'}>
             STATUS: {connected ? 'CONNECTED' : 'STANDBY'}
           </span>
-          <span className="hidden sm:inline text-orange-500/30">|</span>
-          <span className="text-orange-500 font-bold uppercase">
+          <span className="hidden sm:inline text-white/10">|</span>
+          <span className="text-orange-500/80 font-bold uppercase">
             WALLET: {shortenAddress(publicKey)}
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 ${connected ? 'bg-orange-500 animate-pulse' : 'bg-orange-900'}`}></div>
-          <span className="hidden sm:inline text-orange-500/60 uppercase tracking-tighter">MIDEN_RPC_ACTIVE</span>
+          <div className={`w-2 h-2 ${connected ? 'bg-orange-500 animate-pulse' : 'bg-white/10'}`}></div>
+          <span className="hidden sm:inline text-white/20 uppercase tracking-tighter">MIDEN_RPC_ACTIVE</span>
         </div>
       </div>
     </div>
