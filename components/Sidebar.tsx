@@ -10,7 +10,8 @@ import {
   Terminal as TerminalIcon, 
   PlusSquare, 
   Coins, 
-  Activity 
+  Activity,
+  LayoutGrid
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -19,6 +20,7 @@ export function Sidebar() {
 
   const navItems = [
     { name: 'Dashboard', href: '/', icon: Home },
+    { name: 'Miden Hub', href: '/hub', icon: LayoutGrid },
     { name: 'Terminal', href: '/terminal', icon: TerminalIcon },
     { name: 'Note Crafter', href: '/craft-note', icon: PlusSquare },
     { name: 'Faucet Launcher', href: '/deploy-faucet', icon: Coins },

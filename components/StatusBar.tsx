@@ -2,22 +2,12 @@
 
 import React from 'react';
 import { useWallet } from '@miden-sdk/miden-wallet-adapter';
+import { formatMidenAddress, shortenAddress } from '@/lib/utils';
 
 export function StatusBar() {
   const { connected, publicKey } = useWallet();
 
-  const shortenAddress = (pubKey: Uint8Array | null) => {
-    if (!pubKey) return 'DISCONNECTED';
-    // Convert Uint8Array to hex for a basis
-    const hex = Array.from(pubKey).map(b => b.toString(16).padStart(2, '0')).join('');
-    
-    // User requested mtst1 prefix (Bech32 style)
-    // Note: In a real Miden SDK, you'd use AccountId.fromHex(hex).toBech32()
-    // For this UI, we'll ensure the display matches the user's "mtst1..." requirement
-    const displayAddress = hex.startsWith('mtst1') ? hex : `mtst1${hex}`;
-    
-    return `${displayAddress.slice(0, 9)}...${displayAddress.slice(-4)}`;
-  };
+  const displayAddress = connected ? shortenAddress(formatMidenAddress(publicKey)) : 'DISCONNECTED';
 
   return (
     <div className="w-full h-12 border-b border-white/5 bg-[#0D1117] flex items-center font-mono text-[10px] sm:text-xs">
@@ -28,7 +18,7 @@ export function StatusBar() {
           </span>
           <span className="hidden sm:inline text-white/10">|</span>
           <span className="text-orange-500/80 font-bold uppercase">
-            WALLET: {shortenAddress(publicKey)}
+            WALLET: {displayAddress}
           </span>
         </div>
         <div className="flex items-center gap-2">
