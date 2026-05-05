@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "Submission": {
+      "title": "Submission",
+      "description": "A community build or resource submission.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Title of the build." },
+        "author": { "type": "string", "description": "Bech32 address of the author." },
+        "description": { "type": "string", "description": "Short summary of the build." },
+        "type": { "type": "string", "enum": ["Tool", "Tutorial", "Note", "Contract"] },
+        "url": { "type": "string", "format": "uri" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "likes": { "type": "number" },
+        "timestamp": { "type": "number" },
+        "status": { "type": "string", "enum": ["approved", "pending", "featured"] },
+        "authorId": { "type": "string", "description": "Firebase UID of the author." }
+      },
+      "required": ["title", "author", "description", "type", "url", "timestamp", "status", "authorId"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User progress and XP data.",
+      "type": "object",
+      "properties": {
+        "xp": { "type": "number" },
+        "completedTaskIds": { "type": "array", "items": { "type": "string" } },
+        "midenAddress": { "type": "string" }
+      },
+      "required": ["xp", "completedTaskIds"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Privileged users for moderation.",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "/submissions/{submissionId}": {
+      "schema": "Submission",
+      "description": "Public build submissions."
+    },
+    "/userProfiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "User-specific progress data."
+    },
+    "/admins/{userId}": {
+      "schema": "Admin",
+      "description": "Admins with restricted access."
+    }
+  }
+}

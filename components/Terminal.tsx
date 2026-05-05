@@ -142,7 +142,7 @@ export default function TerminalUI() {
         console.error("Failed to parse saved messages", e);
       }
     } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setMessages([
         {
           id: 'welcome',

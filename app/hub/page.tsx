@@ -22,12 +22,34 @@ import {
   History,
   Zap,
   TrendingUp,
-  Award
+  Award,
+  Code2,
+  BookOpen,
+  FileText,
+  Terminal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useWallet } from '@miden-sdk/miden-wallet-adapter';
 import { formatMidenAddress, shortenAddress } from '@/lib/utils';
 import { StatusBar } from '@/components/StatusBar';
+import { useAuth } from '@/components/FirebaseAuthProvider';
+import { auth, db, handleFirestoreError, OperationType } from '@/lib/firebase';
+import { 
+  collection, 
+  onSnapshot, 
+  query, 
+  where, 
+  orderBy, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  setDoc, 
+  getDoc,
+  increment,
+  arrayUnion,
+  Timestamp
+} from 'firebase/firestore';
+import { linkWithPopup, TwitterAuthProvider, GithubAuthProvider, getAdditionalUserInfo } from 'firebase/auth';
 
 // Types
 interface Submission {
@@ -41,6 +63,19 @@ interface Submission {
   likes: number;
   timestamp: number;
   status: 'approved' | 'pending' | 'featured';
+  authorId: string;
+}
+
+interface UserProfile {
+  xp: number;
+  completedTaskIds: string[];
+  midenAddress: string;
+  twitterConnected?: boolean;
+  twitterId?: string;
+  githubConnected?: boolean;
+  githubUsername?: string;
+  telegramConnected?: boolean;
+  telegramUsername?: string;
 }
 
 interface UserTask {
@@ -48,50 +83,27 @@ interface UserTask {
   title: string;
   xp: number;
   completed: boolean;
-  platform: 'X' | 'GitHub' | 'Discord' | 'Miden';
+  platform: 'X' | 'GitHub' | 'Discord' | 'Telegram' | 'Miden';
 }
-
-const DEFAULT_SUBMISSIONS: Submission[] = [
-  {
-    id: '1',
-    title: 'Miden VM Visualizer',
-    author: 'mdev1qztsu0jdhngfhqp42vhd42rme9cqzkzy89e',
-    description: 'A real-time debugger for MASM instructions with stack visualization.',
-    type: 'Tool',
-    url: 'https://github.com/example/miden-viz',
-    tags: ['MASM', 'Debug', 'UI'],
-    likes: 24,
-    timestamp: Date.now() - 86400000 * 2,
-    status: 'featured',
-  },
-  {
-    id: '2',
-    title: 'Zero-Knowledge Privacy Note',
-    author: 'mdev1pztsu1jdhngfhqp42vhd42rme9cqzkzy99a',
-    description: 'A template for creating stealth account notes using P2ID.',
-    type: 'Note',
-    url: 'https://miden.dev/notes/privacy',
-    tags: ['Note', 'Privacy', 'MASM'],
-    likes: 12,
-    timestamp: Date.now() - 86400000,
-    status: 'approved',
-  }
-];
 
 const DEFAULT_TASKS: UserTask[] = [
   { id: 't1', title: 'Follow @PolygonMiden on X', xp: 50, completed: false, platform: 'X' },
   { id: 't2', title: 'Star the Miden-VM Repo', xp: 100, completed: false, platform: 'GitHub' },
   { id: 't3', title: 'Join the Miden Discord', xp: 50, completed: false, platform: 'Discord' },
+  { id: 't5', title: 'Follow the Miden Telegram Channel', xp: 50, completed: false, platform: 'Telegram'},
   { id: 't4', title: 'Submit Your First Build', xp: 500, completed: false, platform: 'Miden' },
 ];
 
 export default function MidenHub() {
   const { connected, publicKey } = useWallet();
-  const [activeTab, setActiveTab] = useState<'feed' | 'tasks' | 'submit' | 'admin'>('feed');
+  const { user, login, isAdmin, loading: authLoading } = useAuth();
+  const [activeTab, setActiveTab] = useState<'feed' | 'tasks' | 'profile' | 'submit' | 'admin'>('feed');
   const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [userTasks, setUserTasks] = useState<UserTask[]>([]);
-  const [xp, setXp] = useState(0);
+  const [profile, setProfile] = useState<UserProfile>({ xp: 0, completedTaskIds: [], midenAddress: '' });
   const [searchQuery, setSearchQuery] = useState('');
+  
+  const [filterType, setFilterType] = useState<Submission['type'] | 'All'>('All');
+  const [filterStatus, setFilterStatus] = useState<'All' | 'approved' | 'featured'>('All');
   
   // Form State
   const [formData, setFormData] = useState({
@@ -104,28 +116,70 @@ export default function MidenHub() {
 
   const walletAddr = useMemo(() => formatMidenAddress(publicKey), [publicKey]);
 
-  // Persistence
+  // Sync Submissions
   useEffect(() => {
-    const savedSubmissions = localStorage.getItem('miden_submissions');
-    const savedTasks = localStorage.getItem('miden_tasks');
-    const savedXp = localStorage.getItem('miden_xp');
+    // Determine query based on admin status
+    let q;
+    if (isAdmin) {
+      q = query(collection(db, 'submissions'));
+    } else {
+      q = query(
+        collection(db, 'submissions'),
+        where('status', 'in', ['approved', 'featured'])
+      );
+    }
 
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let subs = snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data() 
+      } as Submission));
+      // Sort client-side to avoid requiring composite indexes
+      subs.sort((a, b) => b.timestamp - a.timestamp);
+      setSubmissions(subs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'submissions');
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  // Sync User Profile
+  useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect */
-    if (savedSubmissions) setSubmissions(JSON.parse(savedSubmissions));
-    else setSubmissions(DEFAULT_SUBMISSIONS);
-
-    if (savedTasks) setUserTasks(JSON.parse(savedTasks));
-    else setUserTasks(DEFAULT_TASKS);
-
-    if (savedXp) setXp(parseInt(savedXp, 10));
+    if (!user) {
+      setProfile({ xp: 0, completedTaskIds: [], midenAddress: '' });
+      return;
+    }
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
 
-  useEffect(() => {
-    if (submissions.length > 0) localStorage.setItem('miden_submissions', JSON.stringify(submissions));
-    localStorage.setItem('miden_tasks', JSON.stringify(userTasks));
-    localStorage.setItem('miden_xp', xp.toString());
-  }, [submissions, userTasks, xp]);
+    const unsubscribe = onSnapshot(doc(db, 'userProfiles', user.uid), (snapshot) => {
+      if (snapshot.exists()) {
+        setProfile(snapshot.data() as UserProfile);
+      } else {
+        // Initial creation
+        setDoc(doc(db, 'userProfiles', user.uid), {
+          xp: 0,
+          completedTaskIds: [],
+          midenAddress: walletAddr
+        }).catch(err => handleFirestoreError(err, OperationType.WRITE, `userProfiles/${user.uid}`));
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `userProfiles/${user.uid}`);
+    });
+
+    return () => unsubscribe();
+  }, [user, walletAddr]);
+
+  // Derived Tasks State
+  const userTasks = useMemo(() => {
+    return DEFAULT_TASKS.map(task => ({
+      ...task,
+      completed: profile.completedTaskIds.includes(task.id)
+    }));
+  }, [profile]);
+
+  const xp = profile.xp;
 
   // Level Logic
   const getLevelInfo = (currentXp: number) => {
@@ -156,48 +210,168 @@ export default function MidenHub() {
   const levelInfo = getLevelInfo(xp);
 
   // Actions
-  const handleLike = (id: string) => {
-    setSubmissions(prev => prev.map(s => s.id === id ? { ...s, likes: s.likes + 1 } : s));
+  const handleLike = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'submissions', id), {
+        likes: increment(1)
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `submissions/${id}`);
+    }
   };
 
-  const completeTask = (id: string) => {
-    setUserTasks(prev => prev.map(t => {
-      if (t.id === id && !t.completed) {
-        setXp(prevXp => prevXp + t.xp);
-        return { ...t, completed: true };
-      }
-      return t;
-    }));
-  };
+  const [verifyingTask, setVerifyingTask] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!connected) return alert('Connect wallet to submit');
+  const completeTask = async (id: string, taskXp: number, platform: string) => {
+    if (!user) return login();
     
-    const newSubmission: Submission = {
-      id: Math.random().toString(36).substr(2, 9),
-      title: formData.title,
-      author: walletAddr,
-      description: formData.description,
-      type: formData.type,
-      url: formData.url,
-      tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
-      likes: 0,
-      timestamp: Date.now(),
-      status: 'pending',
-    };
+    // Eligibility Check
+    if (platform === 'X' && !profile.twitterConnected) return alert('Please connect Twitter first in the Profile tab.');
+    if (platform === 'GitHub' && !profile.githubConnected) return alert('Please connect GitHub first in the Profile tab.');
+    if (platform === 'Telegram' && !profile.telegramConnected) return alert('Please connect Telegram first in the Profile tab.');
 
-    setSubmissions(prev => [newSubmission, ...prev]);
-    setActiveTab('feed');
-    setFormData({ title: '', description: '', type: 'Tool', url: '', tags: '' });
+    setVerifyingTask(id);
+    try {
+      if (id === 't4') {
+        const hasSubmission = submissions.some(s => s.authorId === user.uid);
+        if (!hasSubmission) {
+          alert('You must submit a build first to complete this task.');
+          setVerifyingTask(null);
+          return;
+        }
+      } else if (platform !== 'Miden' && platform !== 'Discord') {
+        const res = await fetch('/api/verify-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            taskId: id, 
+            githubUsername: profile.githubUsername,
+            twitterId: profile.twitterId,
+            telegramUsername: profile.telegramUsername
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          alert(`Verification failed: ${data.error || 'Server error'}`);
+          setVerifyingTask(null);
+          return;
+        }
+      } else if (platform === 'Discord') {
+          alert('Discord verification is currently not set up. Please configure the integration.');
+          setVerifyingTask(null);
+          return;
+      }
+
+      await updateDoc(doc(db, 'userProfiles', user.uid), {
+        xp: increment(taskXp),
+        completedTaskIds: arrayUnion(id)
+      });
+      alert('Task verified and completed!');
+    } catch (e: any) {
+      alert(`Error verifying task: ${e.message}`);
+    } finally {
+      setVerifyingTask(null);
+    }
   };
 
-  const approveSubmission = (id: string) => {
-    setSubmissions(prev => prev.map(s => s.id === id ? { ...s, status: 'approved' } : s));
+  const handleConnectProvider = async (providerName: 'twitter' | 'github') => {
+    if (!user) return login();
+    try {
+      const provider = providerName === 'twitter' 
+        ? new TwitterAuthProvider() 
+        : new GithubAuthProvider();
+      
+      const result = await linkWithPopup(auth.currentUser!, provider);
+      const additionalInfo = getAdditionalUserInfo(result);
+      
+      const updates: any = {
+        [`${providerName}Connected`]: true
+      };
+
+      if (providerName === 'github' && additionalInfo?.profile?.login) {
+        updates.githubUsername = additionalInfo.profile.login;
+      }
+      if (providerName === 'twitter' && (additionalInfo?.profile?.id_str || additionalInfo?.profile?.id)) {
+        updates.twitterId = (additionalInfo.profile.id_str || additionalInfo.profile.id).toString();
+      }
+
+      await updateDoc(doc(db, 'userProfiles', user.uid), updates);
+      alert(`Successfully connected ${providerName}!`);
+    } catch (error: any) {
+      console.error(error);
+      alert(`Failed to connect ${providerName}: ${error.message} (Note: Provider may need to be enabled in Firebase Console)`);
+    }
+  };
+
+  const [tUsername, setTUsername] = useState('');
+  const handleConnectTelegram = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return login();
+    if (!tUsername) return;
+    try {
+      await updateDoc(doc(db, 'userProfiles', user.uid), {
+        telegramConnected: true,
+        telegramUsername: tUsername
+      });
+      alert('Telegram connected!');
+    } catch (error) {
+      console.error(error);
+      alert('Failed to connect Telegram');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return login();
+    if (!connected) return alert('Connect wallet to verify author');
+    
+    try {
+      await addDoc(collection(db, 'submissions'), {
+        title: formData.title,
+        author: walletAddr,
+        description: formData.description,
+        type: formData.type,
+        url: formData.url,
+        tags: formData.tags.split(',').map(t => t.trim()).filter(Boolean),
+        likes: 0,
+        timestamp: Date.now(),
+        status: 'pending',
+        authorId: user.uid
+      });
+      setActiveTab('feed');
+      setFormData({ title: '', description: '', type: 'Tool', url: '', tags: '' });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, 'submissions');
+    }
+  };
+
+  const approveSubmission = async (id: string) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, 'submissions', id), { 
+        status: 'approved' 
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `submissions/${id}`);
+    }
+  };
+
+  const rejectSubmission = async (id: string) => {
+    if (!isAdmin) return;
+    try {
+      await updateDoc(doc(db, 'submissions', id), { 
+        status: 'rejected' 
+      });
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `submissions/${id}`);
+    }
   };
 
   const filteredSubmissions = submissions.filter(s => 
-    s.status !== 'pending' && 
+    s.status !== 'pending' && s.status !== 'rejected' &&
+    (filterType === 'All' || s.type === filterType) &&
+    (filterStatus === 'All' || s.status === filterStatus) &&
     (s.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
      s.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase())))
   );
@@ -209,14 +383,30 @@ export default function MidenHub() {
       <div className="flex-1 flex overflow-hidden">
         {/* Main Content Area */}
         <div className="flex-1 overflow-y-auto px-8 py-10">
-          <header className="mb-12">
-            <h1 className="text-4xl font-black italic tracking-tighter uppercase text-orange-500">MidenHub_</h1>
-            <p className="text-white/40 text-[10px] uppercase tracking-[0.4em] mt-2">The Central Archive for Verifiable Innovation</p>
+          <header className="mb-12 flex justify-between items-start">
+            <div>
+              <h1 className="text-4xl font-black italic tracking-tighter uppercase text-orange-500">MidenHub_</h1>
+              <p className="text-white/40 text-[10px] uppercase tracking-[0.4em] mt-2">The Central Archive for Verifiable Innovation</p>
+            </div>
+            {!user && !authLoading && (
+              <button 
+                onClick={login}
+                className="bg-orange-500 text-black px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all"
+              >
+                Login with Google
+              </button>
+            )}
+            {user && (
+              <div className="text-right">
+                <span className="text-[10px] text-orange-500 font-bold uppercase tracking-widest block">AGENT: {user.email?.split('@')[0]}</span>
+                <span className="text-[8px] text-white/20 uppercase tracking-tighter block">ID: {shortenAddress(user.uid, 4)}</span>
+              </div>
+            )}
           </header>
 
           {/* Navigation Tabs */}
           <div className="flex gap-8 border-b border-white/5 mb-10 overflow-x-auto no-scrollbar">
-            {(['feed', 'tasks', 'submit', 'admin'] as const).map(tab => (
+            {(['feed', 'tasks', 'profile', 'submit', 'admin'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -243,16 +433,39 @@ export default function MidenHub() {
                 exit={{ opacity: 0, y: -10 }}
                 className="space-y-8"
               >
-                <div className="flex items-center gap-4 bg-white/5 px-4 py-2 border border-white/10 rounded">
-                  <Search size={18} className="text-white/20" />
-                  <input 
-                    type="text" 
-                    placeholder="Search submissions, tags, builders..."
-                    className="bg-transparent border-none outline-none text-sm w-full placeholder:text-white/20"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                  <Filter size={16} className="text-white/20" />
+                <div className="flex flex-col md:flex-row items-center gap-4 bg-white/5 px-4 py-2 border border-white/10 rounded">
+                  <div className="flex items-center gap-4 flex-1 w-full">
+                    <Search size={18} className="text-white/20" />
+                    <input 
+                      type="text" 
+                      placeholder="Search submissions, tags, builders..."
+                      className="bg-transparent border-none outline-none text-sm w-full placeholder:text-white/20"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                    <select
+                      className="bg-[#0D1117] border border-white/10 text-xs text-white/60 py-1.5 px-3 outline-none"
+                      value={filterType}
+                      onChange={(e) => setFilterType(e.target.value as Submission['type'] | 'All')}
+                    >
+                      <option value="All">All Types</option>
+                      <option value="Tool">Tool</option>
+                      <option value="Tutorial">Tutorial</option>
+                      <option value="Note">Note</option>
+                      <option value="Contract">Contract</option>
+                    </select>
+                    <select
+                      className="bg-[#0D1117] border border-white/10 text-xs text-white/60 py-1.5 px-3 outline-none"
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as 'All' | 'approved' | 'featured')}
+                    >
+                      <option value="All">All Status</option>
+                      <option value="approved">Approved</option>
+                      <option value="featured">Featured</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -318,6 +531,7 @@ export default function MidenHub() {
                           {task.platform === 'X' && <Twitter size={20} />}
                           {task.platform === 'GitHub' && <Github size={20} />}
                           {task.platform === 'Discord' && <MessageCircle size={20} />}
+                          {task.platform === 'Telegram' && <Share2 size={20} />}
                           {task.platform === 'Miden' && <Zap size={20} />}
                         </div>
                         <div>
@@ -331,15 +545,17 @@ export default function MidenHub() {
                         </div>
                       </div>
                       <button
-                        onClick={() => !task.completed && completeTask(task.id)}
-                        disabled={task.completed}
+                        onClick={() => !task.completed && verifyingTask !== task.id && completeTask(task.id, task.xp, task.platform)}
+                        disabled={task.completed || verifyingTask === task.id}
                         className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
                           task.completed 
                             ? 'text-orange-500' 
+                            : verifyingTask === task.id
+                            ? 'bg-orange-500/50 text-white animate-pulse'
                             : 'bg-orange-500 text-black hover:bg-white'
                         }`}
                       >
-                        {task.completed ? <CheckCircle2 size={16} /> : 'Claim'}
+                        {task.completed ? <CheckCircle2 size={16} /> : verifyingTask === task.id ? 'VERIFYING...' : 'Claim'}
                       </button>
                     </div>
                   ))}
@@ -359,6 +575,130 @@ export default function MidenHub() {
               </motion.div>
             )}
 
+            {activeTab === 'profile' && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="max-w-2xl mx-auto space-y-8"
+              >
+                {!user ? (
+                  <div className="text-center py-20 border border-white/5 bg-[#161B22]">
+                    <User size={48} className="mx-auto text-orange-500/20 mb-6" />
+                    <h2 className="text-xl font-bold text-white mb-2 uppercase">Login Required</h2>
+                    <p className="text-xs text-white/40 uppercase mb-8">Authentication required to view and link accounts</p>
+                    <button 
+                      onClick={login}
+                      className="bg-orange-500 text-black px-6 py-3 text-xs font-black uppercase tracking-widest hover:bg-white transition-all"
+                    >
+                      Login with Google
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-8 border border-white/5 bg-[#161B22]">
+                      <div className="flex items-center gap-6 mb-8">
+                        <div className="w-16 h-16 rounded-full border border-orange-500 flex items-center justify-center bg-orange-500/10">
+                          <User size={28} className="text-orange-500" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-bold uppercase tracking-widest text-white">{user.email}</h2>
+                          <div className="text-[10px] text-white/40 uppercase tracking-widest mt-2">{walletAddr || 'WALLET NOT CONNECTED'}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="p-4 border border-white/5 bg-[#0D1117] text-center">
+                          <div className="text-2xl font-black text-orange-500 mb-1">{profile.xp}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-widest">Total XP</div>
+                        </div>
+                        <div className="p-4 border border-white/5 bg-[#0D1117] text-center">
+                          <div className="text-2xl font-black text-white mb-1">{profile.completedTaskIds?.length || 0}</div>
+                          <div className="text-[10px] text-white/40 uppercase tracking-widest">Tasks Done</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-8 border border-white/5 bg-[#161B22]">
+                      <h3 className="text-lg font-bold uppercase tracking-widest text-white mb-6 border-b border-white/5 pb-4">Social Accounts</h3>
+                      <div className="space-y-4">
+                        
+                        <div className="flex items-center justify-between p-4 border border-white/5 bg-[#0D1117]">
+                          <div className="flex items-center gap-4">
+                            <Twitter size={20} className="text-white/40" />
+                            <div>
+                              <div className="text-sm font-bold uppercase tracking-widest text-white">X (Twitter)</div>
+                              {profile.twitterConnected && <div className="text-[10px] text-orange-500 uppercase">Connected</div>}
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => handleConnectProvider('twitter')}
+                            disabled={profile.twitterConnected}
+                            className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                              profile.twitterConnected ? 'text-white/20 border border-white/10' : 'bg-orange-500 text-black hover:bg-white'
+                            }`}
+                          >
+                            {profile.twitterConnected ? 'Linked' : 'Connect'}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 border border-white/5 bg-[#0D1117]">
+                          <div className="flex items-center gap-4">
+                            <Github size={20} className="text-white/40" />
+                            <div>
+                              <div className="text-sm font-bold uppercase tracking-widest text-white">GitHub</div>
+                              {profile.githubConnected && <div className="text-[10px] text-orange-500 uppercase">Connected</div>}
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => handleConnectProvider('github')}
+                            disabled={profile.githubConnected}
+                            className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest transition-all ${
+                              profile.githubConnected ? 'text-white/20 border border-white/10' : 'bg-orange-500 text-black hover:bg-white'
+                            }`}
+                          >
+                            {profile.githubConnected ? 'Linked' : 'Connect'}
+                          </button>
+                        </div>
+
+                        <form onSubmit={handleConnectTelegram} className="flex items-center justify-between p-4 border border-white/5 bg-[#0D1117] gap-4">
+                          <div className="flex items-center gap-4 shrink-0">
+                            <Share2 size={20} className="text-white/40" />
+                            <div>
+                              <div className="text-sm font-bold uppercase tracking-widest text-white">Telegram</div>
+                              {profile.telegramConnected && <div className="text-[10px] text-orange-500 uppercase">@{profile.telegramUsername}</div>}
+                            </div>
+                          </div>
+                          {profile.telegramConnected ? (
+                            <div className="px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white/20 border border-white/10 shrink-0">
+                              Linked
+                            </div>
+                          ) : (
+                            <div className="flex w-full justify-end max-w-xs relative items-center">
+                              <span className="absolute left-3 text-white/40 text-xs">@</span>
+                              <input 
+                                type="text"
+                                placeholder="username"
+                                value={tUsername}
+                                onChange={(e) => setTUsername(e.target.value)}
+                                className="w-full bg-[#161B22] border border-white/10 pl-8 pr-4 py-2 text-xs focus:border-orange-500 outline-none text-white mr-2"
+                              />
+                              <button 
+                                type="submit"
+                                disabled={!tUsername}
+                                className="shrink-0 bg-orange-500 text-black px-4 py-2 text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50"
+                              >
+                                Connect
+                              </button>
+                            </div>
+                          )}
+                        </form>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
+
             {activeTab === 'submit' && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
@@ -366,12 +706,23 @@ export default function MidenHub() {
                 exit={{ opacity: 0, y: -10 }}
                 className="max-w-2xl mx-auto"
               >
-                {!connected ? (
+                {!user ? (
+                  <div className="text-center py-20 border border-white/5 bg-[#161B22]">
+                    <Shield size={48} className="mx-auto text-orange-500/20 mb-6" />
+                    <h2 className="text-xl font-bold text-white mb-2 uppercase">Login Required</h2>
+                    <p className="text-xs text-white/40 uppercase mb-8">Authentication required to push to queue</p>
+                    <button 
+                      onClick={login}
+                      className="bg-orange-500 text-black px-6 py-3 text-xs font-black uppercase tracking-widest hover:bg-white transition-all"
+                    >
+                      Login with Google
+                    </button>
+                  </div>
+                ) : !connected ? (
                   <div className="text-center py-20 border border-white/5 bg-[#161B22]">
                     <Shield size={48} className="mx-auto text-orange-500/20 mb-6" />
                     <h2 className="text-xl font-bold text-white mb-2 uppercase">Connection Required</h2>
                     <p className="text-xs text-white/40 uppercase mb-8">Author identity must be verifiable on-chain</p>
-                    {/* Assuming Sidebar or Header handles connection, but we can hint */}
                   </div>
                 ) : (
                   <form onSubmit={handleSubmit} className="space-y-8 bg-[#161B22] p-8 border border-white/5">
@@ -441,6 +792,55 @@ export default function MidenHub() {
                        />
                     </div>
 
+                    <div className="pt-6 border-t border-white/5 mt-8 block">
+                      <h3 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">Live Preview</h3>
+                      <div className="p-6 border border-white/5 bg-[#161B22] hover:border-orange-500/30 transition-all flex flex-col group relative overflow-hidden pointer-events-none">
+                         <div className="flex items-center justify-between mb-4">
+                           <div className="flex items-center gap-3">
+                             <div className="w-8 h-8 rounded border border-white/10 flex items-center justify-center bg-[#0D1117]">
+                               {formData.type === 'Tool' && <Code2 size={16} className="text-white/60" />}
+                               {formData.type === 'Tutorial' && <BookOpen size={16} className="text-white/60" />}
+                               {formData.type === 'Note' && <FileText size={16} className="text-white/60" />}
+                               {formData.type === 'Contract' && <Terminal size={16} className="text-white/60" />}
+                             </div>
+                             <div>
+                               <h3 className="font-bold text-white uppercase tracking-widest text-sm group-hover:text-orange-500 transition-colors">
+                                 {formData.title || 'Miden Explorer Alpha'}
+                               </h3>
+                               <div className="text-[10px] text-white/40 uppercase tracking-widest mt-1">
+                                 {formData.type} {'//'} {shortenAddress(walletAddr || 'YOUR_WALLET')}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                         <p className="text-sm text-white/50 leading-relaxed mb-6 line-clamp-2">
+                           {formData.description || 'EXPLAIN THE CORE LOGIC AND ZK-PROVING EFFICIENCY...'}
+                         </p>
+                         <div className="mt-auto">
+                           <div className="flex flex-wrap gap-2 mb-4">
+                             {(formData.tags ? formData.tags.split(',').map(t => t.trim()).filter(Boolean) : ['ZK', 'MASM', 'P2ID']).map(tag => (
+                               <span key={tag} className="text-[9px] px-2 py-1 bg-white/5 border border-white/10 text-white/60 font-mono">
+                                 {tag}
+                               </span>
+                             ))}
+                           </div>
+                           <div className="flex items-center justify-between text-[11px] font-bold border-t border-white/5 pt-4 uppercase tracking-widest text-white/40">
+                             <div className="flex gap-4">
+                               <span className="flex items-center gap-1.5 transition-colors">
+                                 <Heart size={14} /> 0
+                               </span>
+                               <span className="flex items-center gap-1.5 transition-colors">
+                                 <MessageCircle size={14} /> 0
+                               </span>
+                             </div>
+                             <span className="flex items-center gap-1.5 transition-colors">
+                               <ExternalLink size={14} /> LAUNCH
+                             </span>
+                           </div>
+                         </div>
+                      </div>
+                    </div>
+
                     <div className="pt-6">
                       <button 
                         type="submit"
@@ -460,7 +860,14 @@ export default function MidenHub() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
               >
-                <div className="flex flex-col gap-6">
+                {!isAdmin ? (
+                  <div className="text-center py-20 border border-white/5 bg-[#161B22]">
+                    <Shield size={48} className="mx-auto text-orange-500/20 mb-6" />
+                    <h2 className="text-xl font-bold text-white mb-2 uppercase">Restricted Access</h2>
+                    <p className="text-xs text-white/40 uppercase mb-8">Admin credentials required for moderation</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-6">
                    <div className="flex items-center justify-between mb-4">
                      <h2 className="text-xl font-bold uppercase tracking-widest flex items-center gap-3">
                        <Shield size={20} className="text-orange-500" /> Review_Queue
@@ -495,7 +902,7 @@ export default function MidenHub() {
                            >
                              Approve
                            </button>
-                           <button className="border border-white/10 text-white/40 px-4 py-2 text-[10px] font-bold uppercase hover:bg-red-500/20 hover:text-red-500 hover:border-red-500 transition-all">
+                           <button onClick={() => rejectSubmission(sub.id)} className="border border-white/10 text-white/40 px-4 py-2 text-[10px] font-bold uppercase hover:bg-red-500/20 hover:text-red-500 hover:border-red-500 transition-all">
                              Reject
                            </button>
                          </div>
@@ -503,6 +910,7 @@ export default function MidenHub() {
                      ))
                    )}
                 </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>

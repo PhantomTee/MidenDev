@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitive Definition
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 1. Submissions Security
+    match /submissions/{submissionId} {
+      function isValidSubmission(data) {
+        return data.title is string && data.title.size() <= 100 &&
+               data.author is string && data.author.size() <= 128 &&
+               data.description is string && data.description.size() <= 500 &&
+               data.type in ['Tool', 'Tutorial', 'Note', 'Contract'] &&
+               data.url is string && data.url.size() <= 2048 &&
+               data.tags is list && data.tags.size() <= 10 &&
+               data.likes is number &&
+               data.timestamp is int &&
+               data.status in ['approved', 'pending', 'featured', 'rejected'] &&
+               data.authorId == request.auth.uid;
+      }
+
+      // Public reads for approved/featured
+      allow list: if (resource.data.status in ['approved', 'featured']) || isAdmin();
+      allow get: if (resource.data.status in ['approved', 'featured']) || isAdmin() || isOwner(resource.data.authorId);
+
+      allow create: if isEmailVerified() && 
+                    isValidSubmission(incoming()) && 
+                    incoming().status == 'pending' &&
+                    incoming().likes == 0;
+
+      allow update: if isEmailVerified() && (
+        // Admin: Can update status and featured
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'likes'])) ||
+        // User: Can like (increment only)
+        (incoming().diff(existing()).affectedKeys().hasOnly(['likes']) && incoming().likes == existing().likes + 1) ||
+        // Author: Can update content IF still pending
+        (isOwner(existing().authorId) && existing().status == 'pending' && 
+         isValidSubmission(incoming()) && 
+         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'url', 'tags', 'type']))
+      );
+
+      allow delete: if isAdmin() || (isOwner(existing().authorId) && existing().status == 'pending');
+    }
+
+    // 2. User Profiles Security
+    match /userProfiles/{userId} {
+      function isValidProfile(data) {
+        return data.xp is int && data.xp >= 0 &&
+               data.completedTaskIds is list && data.completedTaskIds.size() <= 50 &&
+               (!('midenAddress' in data) || (data.midenAddress is string && data.midenAddress.size() <= 128)) &&
+               (!('twitterConnected' in data) || data.twitterConnected is bool) &&
+               (!('githubConnected' in data) || data.githubConnected is bool) &&
+               (!('telegramConnected' in data) || data.telegramConnected is bool) &&
+               (!('telegramUsername' in data) || (data.telegramUsername is string && data.telegramUsername.size() <= 64));
+      }
+
+      allow get, write: if isOwner(userId) && isValidProfile(incoming() ? incoming() : existing());
+      
+      // Strict update rules for XP and tasks
+      allow update: if isOwner(userId) && 
+                    isValidProfile(incoming()) &&
+                    incoming().xp >= existing().xp; // XP can only go up
+    }
+
+    // 3. Admins (Read-only for app logic check, but get() in rules doesn't need this)
+    match /admins/{userId} {
+      allow get: if isSignedIn();
+    }
+  }
+}

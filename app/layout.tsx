@@ -3,8 +3,8 @@ import './globals.css'; // Global styles
 import { ClientProviders } from './ClientProviders';
 
 export const metadata: Metadata = {
-  title: 'My Google AI Studio App',
-  description: 'My Google AI Studio App',
+  title: 'MidenDev',
+  description: 'An AI-powered terminal-style interface for building Miden blockchain smart contracts.',
 };
 
 import { Sidebar } from '@/components/Sidebar';
